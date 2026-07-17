@@ -1,4 +1,3 @@
-Dashboard Streamlit untuk Forecasting Harga Emas.
 import io
 import json
 import os
