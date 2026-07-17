@@ -909,21 +909,21 @@ elif page.startswith("ℹ️"):
 
     ```
       harga_emas.csv
-             │
-             ▼
+            │
+            ▼
       train_model.py
-             │
+            │
       ┌─────┴──────┐
-      │              │
+      │             │
     Holt-Winters  Prophet
-      │              │
+      │             │
       └─────┬──────┘
-             │
+            │
        Evaluasi & Pilih Terbaik
-             │
+            │
        model.pkl + metrics.json
-             │
-             ▼
+            │
+            ▼
          app.py (Dashboard)
     ```
 
