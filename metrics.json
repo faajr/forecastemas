@@ -1,0 +1,15 @@
+{
+  "best_model": "Holt-Winters",
+  "last_price": 4001.4,
+  "last_date": "2026-07-17",
+  "holt_winters": {
+    "MAE": 245.2861,
+    "RMSE": 273.5386,
+    "MAPE": 6.0175
+  },
+  "prophet": {
+    "MAE": 600.7606,
+    "RMSE": 619.7797,
+    "MAPE": 14.6333
+  }
+}
