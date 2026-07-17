@@ -914,9 +914,9 @@ elif page.startswith("ℹ️"):
       train_model.py
             │
       ┌─────┴──────┐
-      │             │
+      │            │
     Holt-Winters  Prophet
-      │             │
+      │            │
       └─────┬──────┘
             │
        Evaluasi & Pilih Terbaik
