@@ -969,7 +969,5 @@ elif page.startswith("ℹ️"):
 
     ---
 
-    <div style="text-align:center; color:#555; font-size:0.8rem; margin-top:40px;">
-      Made with ❤️ &amp; ☕ · Gold Price Forecast Dashboard
-    </div>
+          Made with ❤️  · Gold Price Forecast Dashboard
     """)
