@@ -1,12 +1,4 @@
 Dashboard Streamlit untuk Forecasting Harga Emas.
-
-Halaman:
-  🏠 Dashboard  — ringkasan KPI & chart historis
-  📈 Forecast   — pilih horizon & jalankan prediksi
-  📊 Evaluasi   — perbandingan model (MAE / RMSE / MAPE)
-  📄 Dataset    — tabel data historis
-  ℹ️  About      — informasi proyek
-
 import io
 import json
 import os
