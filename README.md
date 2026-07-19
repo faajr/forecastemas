@@ -8,6 +8,8 @@
 
     Model terbaik dipilih otomatis berdasarkan **MAPE** terendah pada data uji.
 
+    Live Demo: https://forecastemas.streamlit.app
+
 ## 📂 Dataset
     | Sumber | Yahoo Finance (`GC=F`) |
     |--------|----------------------|
