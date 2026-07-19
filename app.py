@@ -1,3 +1,19 @@
+"""
+app.py
+======
+Dashboard Streamlit untuk Forecasting Harga Emas.
+
+Halaman:
+  🏠 Dashboard  — ringkasan KPI & chart historis
+  📈 Forecast   — pilih horizon & jalankan prediksi
+  📊 Evaluasi   — perbandingan model (MAE / RMSE / MAPE)
+  📄 Dataset    — tabel data historis
+  ℹ️  About      — informasi proyek
+
+Jalankan:
+  streamlit run app.py
+"""
+
 import io
 import json
 import os
@@ -15,7 +31,7 @@ warnings.filterwarnings("ignore")
 
 # ─── Konstanta ────────────────────────────────────────────────────────────────
 DATA_URL     = "https://raw.githubusercontent.com/faajr/forecastemas/main/harga_emas.csv"
-DATA_PATH    = "harga_emas.csv"
+DATA_PATH    = "harga_emas_siap_forecast.csv"
 MODEL_PATH   = "model.pkl"
 METRICS_PATH = "metrics.json"
 
@@ -263,18 +279,139 @@ def load_data() -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=False)
+def compute_metrics(y_true, y_pred) -> dict:
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    mae  = float(np.mean(np.abs(y_true - y_pred)))
+    rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+    mape = float(np.mean(np.abs((y_true - y_pred) / y_true)) * 100)
+    return {"MAE": round(mae, 4), "RMSE": round(rmse, 4), "MAPE": round(mape, 4)}
+
+def train_model_on_the_fly(df: pd.DataFrame):
+    """Melatih model secara otomatis di server jika model.pkl tidak kompatibel atau tidak ada."""
+    with st.spinner("⏳ Menyiapkan model machine learning di server (ini hanya dilakukan sekali)..."):
+        TEST_SIZE = 30
+        SEASONAL_PERIOD = 5
+        
+        train = df.iloc[:-TEST_SIZE]
+        test  = df.iloc[-TEST_SIZE:]
+        
+        # 1. Holt-Winters
+        try:
+            model_hw = ExponentialSmoothing(
+                train["Close"],
+                trend="add",
+                seasonal="add",
+                seasonal_periods=SEASONAL_PERIOD,
+                initialization_method="estimated",
+            )
+            fitted_hw = model_hw.fit(optimized=True)
+            hw_preds  = fitted_hw.forecast(TEST_SIZE).values
+            hw_metrics = compute_metrics(test["Close"].values, hw_preds)
+        except Exception:
+            hw_metrics = {"MAE": 999999.0, "RMSE": 999999.0, "MAPE": 100.0}
+            fitted_hw = None
+            
+        # 2. Prophet
+        try:
+            df_prophet = train.reset_index().rename(columns={"Date": "ds", "Close": "y"})
+            model_pr = Prophet(
+                daily_seasonality=False,
+                weekly_seasonality=True,
+                yearly_seasonality=True,
+                changepoint_prior_scale=0.05,
+            )
+            model_pr.fit(df_prophet)
+            future = model_pr.make_future_dataframe(periods=TEST_SIZE)
+            forecast = model_pr.predict(future)
+            pr_preds = forecast.tail(TEST_SIZE)["yhat"].values
+            pr_metrics = compute_metrics(test["Close"].values, pr_preds)
+        except Exception:
+            pr_metrics = {"MAE": 999999.0, "RMSE": 999999.0, "MAPE": 100.0}
+            model_pr = None
+            
+        # Tentukan terbaik
+        if hw_metrics["MAPE"] <= pr_metrics["MAPE"] and fitted_hw is not None:
+            best_model_name = "Holt-Winters"
+            try:
+                best_model = ExponentialSmoothing(
+                    df["Close"],
+                    trend="add",
+                    seasonal="add",
+                    seasonal_periods=SEASONAL_PERIOD,
+                    initialization_method="estimated",
+                ).fit(optimized=True)
+            except Exception:
+                best_model = fitted_hw
+        else:
+            best_model_name = "Prophet"
+            try:
+                full_prophet = df.reset_index().rename(columns={"Date": "ds", "Close": "y"})
+                best_model = Prophet(
+                    daily_seasonality=False,
+                    weekly_seasonality=True,
+                    yearly_seasonality=True,
+                    changepoint_prior_scale=0.05,
+                )
+                best_model.fit(full_prophet)
+            except Exception:
+                best_model = model_pr
+                
+        # Simpan model
+        model_data = {
+            "model_name": best_model_name,
+            "model":      best_model,
+        }
+        try:
+            joblib.dump(model_data, MODEL_PATH)
+        except Exception:
+            pass
+            
+        # Simpan metrik
+        last_price = float(df["Close"].iloc[-1])
+        metrics_data = {
+            "best_model":     best_model_name,
+            "last_price":     round(last_price, 2),
+            "last_date":      str(df.index[-1].date()),
+            "holt_winters":   hw_metrics,
+            "prophet":        pr_metrics,
+        }
+        try:
+            with open(METRICS_PATH, "w") as f:
+                json.dump(metrics_data, f, indent=2)
+        except Exception:
+            pass
+            
+        return model_data, metrics_data
+
 def load_metrics() -> dict:
     if not os.path.exists(METRICS_PATH):
+        if not df.empty:
+            _, metrics_data = train_model_on_the_fly(df)
+            return metrics_data
         return {}
-    with open(METRICS_PATH) as f:
-        return json.load(f)
-
+    try:
+        with open(METRICS_PATH) as f:
+            return json.load(f)
+    except Exception:
+        if not df.empty:
+            _, metrics_data = train_model_on_the_fly(df)
+            return metrics_data
+        return {}
 
 def load_model():
     if not os.path.exists(MODEL_PATH):
+        if not df.empty:
+            model_data, _ = train_model_on_the_fly(df)
+            return model_data
         return None
-    return joblib.load(MODEL_PATH)
+    try:
+        return joblib.load(MODEL_PATH)
+    except Exception:
+        if not df.empty:
+            model_data, _ = train_model_on_the_fly(df)
+            return model_data
+        return None
 
 
 def plotly_theme() -> dict:
@@ -381,16 +518,24 @@ with st.sidebar:
 #  Data & model loading
 # ═══════════════════════════════════════════════════════════════════════════════
 
-df      = load_data()
-metrics = load_metrics()
+df = load_data()
+data_ok = not df.empty
 
-data_ok  = not df.empty
-model_ok = os.path.exists(MODEL_PATH)
+if data_ok:
+    metrics = load_metrics()
+    try:
+        model_data = load_model()
+        model_ok = (model_data is not None)
+    except Exception:
+        model_ok = False
+else:
+    metrics = {}
+    model_ok = False
 
 if not data_ok:
     st.error(
-        "⚠️ File **harga_emas_siap_forecast.csv** tidak ditemukan di direktori ini.\n\n"
-        "Letakkan file CSV di folder yang sama dengan `app.py` lalu refresh halaman."
+        "⚠️ File **harga_emas_siap_forecast.csv** tidak ditemukan di direktori ini dan gagal diunduh dari URL.\n\n"
+        "Silakan periksa koneksi internet Anda lalu refresh halaman."
     )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -908,7 +1053,7 @@ elif page.startswith("ℹ️"):
     ## 🔬 Machine Learning Workflow
 
     ```
-      harga_emas.csv
+    harga_emas_siap_forecast.csv
             │
             ▼
       train_model.py
@@ -969,5 +1114,7 @@ elif page.startswith("ℹ️"):
 
     ---
 
-          Made with ❤️  · Gold Price Forecast Dashboard
+    <div style="text-align:center; color:#555; font-size:0.8rem; margin-top:40px;">
+      Made with ❤️ &amp; ☕ · Gold Price Forecast Dashboard
+    </div>
     """)
