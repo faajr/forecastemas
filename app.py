@@ -659,8 +659,8 @@ if page.startswith("🏠"):
         height=420,
         title=dict(text=f"Harga Emas (GC=F) — {curr_label} per Troy Ounce", font=dict(color=GOLD_LIGHT, size=15)),
         xaxis_rangeslider_visible=True,
-        yaxis=dict(tickprefix=y_prefix)
     )
+    fig_hist.update_yaxes(tickprefix=y_prefix)
     st.plotly_chart(fig_hist, use_container_width=True)
 
     # Statistik ringkas
@@ -777,14 +777,14 @@ elif page.startswith("📈"):
             marker=dict(size=6, color="#FF8C00", symbol="circle"), hovertemplate=htemp_fc,
         ))
 
-        fig_fc.add_vline(x=last_date, line_width=1.5, line_dash="dash", line_color="rgba(255,215,0,0.5)")
+       fig_fc.add_vline(x=last_date, line_width=1.5, line_dash="dash", line_color="rgba(255,215,0,0.5)")
         y_prefix = "Rp " if is_idr else "$"
         fig_fc.update_layout(
             **plotly_theme(), height=460,
             title=dict(text=f"Forecast {horizon} Hari ke Depan — {model_name}", font=dict(color=GOLD_LIGHT, size=15)),
             xaxis_rangeslider_visible=False,
-            yaxis=dict(tickprefix=y_prefix)
         )
+        fig_fc.update_yaxes(tickprefix=y_prefix)
         st.plotly_chart(fig_fc, use_container_width=True)
 
         st.markdown('<div class="section-title">📋 Detail Forecast Harian</div>', unsafe_allow_html=True)
