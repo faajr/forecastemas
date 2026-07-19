@@ -1,17 +1,11 @@
 """
-app.py
-======
 Dashboard Streamlit untuk Forecasting Harga Emas.
-
 Halaman:
   🏠 Dashboard  — ringkasan KPI & chart historis
   📈 Forecast   — pilih horizon & jalankan prediksi
   📊 Evaluasi   — perbandingan model (MAE / RMSE / MAPE)
   📄 Dataset    — tabel data historis
   ℹ️  About      — informasi proyek
-
-Jalankan:
-  streamlit run app.py
 """
 
 import io
@@ -31,7 +25,7 @@ warnings.filterwarnings("ignore")
 
 # ─── Konstanta ────────────────────────────────────────────────────────────────
 DATA_URL     = "https://raw.githubusercontent.com/faajr/forecastemas/main/harga_emas.csv"
-DATA_PATH    = "harga_emas_siap_forecast.csv"
+DATA_PATH    = "harga_emas.csv"
 MODEL_PATH   = "model.pkl"
 METRICS_PATH = "metrics.json"
 
@@ -1114,7 +1108,5 @@ elif page.startswith("ℹ️"):
 
     ---
 
-    <div style="text-align:center; color:#555; font-size:0.8rem; margin-top:40px;">
-      Made with ❤️ &amp; ☕ · Gold Price Forecast Dashboard
-    </div>
+      Made with ❤️ ☕ · Gold Price Forecast Dashboard
     """)
