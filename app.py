@@ -29,6 +29,9 @@ DATA_PATH    = "harga_emas.csv"
 MODEL_PATH   = "model.pkl"
 METRICS_PATH = "metrics.json"
 
+# Nilai konversi standar internasional: 1 Troy Ounce = 31,1 gram
+GRAM_PER_TROY_OZ = 31.1
+
 # Palet warna gold premium
 GOLD_PRIMARY  = "#FFD700"
 GOLD_DARK     = "#C9A000"
@@ -520,6 +523,24 @@ with st.sidebar:
     is_idr = (currency_mode == "IDR")
     curr_label = "IDR" if is_idr else "USD"
 
+    # -- Weight Unit Toggle --
+    st.markdown('<hr style="border-color:rgba(255,215,0,0.15); margin:18px 0 14px;">', unsafe_allow_html=True)
+    st.markdown('<div style="color:#FFD700; font-weight:600; font-size:0.85rem; margin-bottom:8px;">SATUAN BERAT</div>', unsafe_allow_html=True)
+    satuan_berat = st.radio("Satuan Berat", ["Troy Ounce", "Gram"], horizontal=True, label_visibility="collapsed")
+
+    is_gram     = (satuan_berat == "Gram")
+    satuan_label = "gram" if is_gram else "troy oz"
+
+    # Jika Gram: harga dasar (USD/troy oz) dibagi 31,1 lalu dikalikan kurs (jika IDR)
+    harga_rate = (kurs_val / GRAM_PER_TROY_OZ) if is_gram else kurs_val
+
+    if is_gram:
+        st.markdown(
+            '<div style="font-size:0.72rem; color:#A08800; margin-top:-4px;">'
+            '1 Troy Ounce = 31,1 gram (harga otomatis dikonversi per gram)</div>',
+            unsafe_allow_html=True,
+        )
+
     st.markdown("""
     <hr style="border-color:rgba(255,215,0,0.15); margin:18px 0 14px;">
     <div style="font-size:0.72rem; color:#555; text-align:center;">
@@ -587,8 +608,8 @@ if page.startswith("🏠"):
         st.markdown(f"""
         <div class="kpi-card">
           <div class="kpi-label">Harga Terakhir</div>
-          <div class="kpi-value">{fmt_price(last_price, is_idr, kurs_val)}</div>
-          <div class="kpi-sub {delta_color}">{delta_arrow} {fmt_price(abs(delta), is_idr, kurs_val)} ({delta_pct:+.2f}%)</div>
+          <div class="kpi-value">{fmt_price(last_price, is_idr, harga_rate)}</div>
+          <div class="kpi-sub {delta_color}">{delta_arrow} {fmt_price(abs(delta), is_idr, harga_rate)} ({delta_pct:+.2f}%)</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -611,7 +632,7 @@ if page.startswith("🏠"):
         """, unsafe_allow_html=True)
 
     with c4:
-        rmse_display = fmt_price(rmse_val, is_idr, kurs_val) if isinstance(rmse_val, (int, float)) else "—"
+        rmse_display = fmt_price(rmse_val, is_idr, harga_rate) if isinstance(rmse_val, (int, float)) else "—"
         st.markdown(f"""
         <div class="kpi-card">
           <div class="kpi-label">RMSE</div>
@@ -630,7 +651,7 @@ if page.startswith("🏠"):
     sel_years = st.slider("Pilih rentang tahun", min_value=year_min, max_value=year_max, value=(year_min, year_max), step=1)
     
     df_filtered = df[(df.index.year >= sel_years[0]) & (df.index.year <= sel_years[1])].copy()
-    df_filtered["Close"] = df_filtered["Close"] * kurs_val  # Apply conversion to plot
+    df_filtered["Close"] = df_filtered["Close"] * harga_rate  # Apply conversion to plot
     ma30 = df_filtered["Close"].rolling(30).mean()
 
     htemp = "<b>%{x|%d %b %Y}</b><br>Rp %{y:,.0f}<extra></extra>" if is_idr else "<b>%{x|%d %b %Y}</b><br>$%{y:,.2f}<extra></extra>"
@@ -657,7 +678,7 @@ if page.startswith("🏠"):
     fig_hist.update_layout(
         **plotly_theme(),
         height=420,
-        title=dict(text=f"Harga Emas (GC=F) — {curr_label} per Troy Ounce", font=dict(color=GOLD_LIGHT, size=15)),
+        title=dict(text=f"Harga Emas (GC=F) — {curr_label} per {satuan_label.title()}", font=dict(color=GOLD_LIGHT, size=15)),
         xaxis_rangeslider_visible=True,
     )
     fig_hist.update_yaxes(tickprefix=y_prefix)
@@ -667,10 +688,10 @@ if page.startswith("🏠"):
     st.markdown('<div class="section-title">📊 Statistik Historis</div>', unsafe_allow_html=True)
     s1, s2, s3, s4, s5 = st.columns(5)
     stats = df["Close"].agg(["min", "max", "mean", "std"])
-    s1.metric("Min", fmt_price(stats["min"], is_idr, kurs_val))
-    s2.metric("Max", fmt_price(stats["max"], is_idr, kurs_val))
-    s3.metric("Rata-rata", fmt_price(stats["mean"], is_idr, kurs_val))
-    s4.metric("Std Dev", fmt_price(stats["std"], is_idr, kurs_val))
+    s1.metric("Min", fmt_price(stats["min"], is_idr, harga_rate))
+    s2.metric("Max", fmt_price(stats["max"], is_idr, harga_rate))
+    s3.metric("Rata-rata", fmt_price(stats["mean"], is_idr, harga_rate))
+    s4.metric("Std Dev", fmt_price(stats["std"], is_idr, harga_rate))
     s5.metric("Total Data", f"{len(df):,} hari")
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -719,25 +740,25 @@ elif page.startswith("📈"):
         with k1:
             st.markdown(f"""
             <div class="kpi-card"><div class="kpi-label">Harga Hari Ini</div>
-              <div class="kpi-value">{fmt_price(last_price, is_idr, kurs_val)}</div>
+              <div class="kpi-value">{fmt_price(last_price, is_idr, harga_rate)}</div>
               <div class="kpi-sub">{last_date.strftime('%d %b %Y')}</div>
             </div>""", unsafe_allow_html=True)
         with k2:
             st.markdown(f"""
             <div class="kpi-card"><div class="kpi-label">Forecast Tertinggi</div>
-              <div class="kpi-value kpi-up">{fmt_price(yhat_max, is_idr, kurs_val)}</div>
+              <div class="kpi-value kpi-up">{fmt_price(yhat_max, is_idr, harga_rate)}</div>
               <div class="kpi-sub">Dalam {horizon} hari</div>
             </div>""", unsafe_allow_html=True)
         with k3:
             st.markdown(f"""
             <div class="kpi-card"><div class="kpi-label">Forecast Terendah</div>
-              <div class="kpi-value kpi-down">{fmt_price(yhat_min, is_idr, kurs_val)}</div>
+              <div class="kpi-value kpi-down">{fmt_price(yhat_min, is_idr, harga_rate)}</div>
               <div class="kpi-sub">Dalam {horizon} hari</div>
             </div>""", unsafe_allow_html=True)
         with k4:
             st.markdown(f"""
             <div class="kpi-card"><div class="kpi-label">Rata-rata Forecast</div>
-              <div class="kpi-value">{fmt_price(yhat_mean, is_idr, kurs_val)}</div>
+              <div class="kpi-value">{fmt_price(yhat_mean, is_idr, harga_rate)}</div>
               <div class="kpi-sub">Dalam {horizon} hari</div>
             </div>""", unsafe_allow_html=True)
         with k5:
@@ -751,11 +772,11 @@ elif page.startswith("📈"):
         st.markdown('<div class="section-title">📈 Grafik Historis + Forecast</div>', unsafe_allow_html=True)
 
         hist_tail = df.tail(90).copy()
-        hist_tail["Close"] = hist_tail["Close"] * kurs_val
+        hist_tail["Close"] = hist_tail["Close"] * harga_rate
         
         fc_plot = forecast_df.copy()
         for col in ["yhat", "yhat_lower", "yhat_upper"]:
-            fc_plot[col] = fc_plot[col] * kurs_val
+            fc_plot[col] = fc_plot[col] * harga_rate
 
         htemp_hist = "<b>%{x|%d %b %Y}</b><br>Rp %{y:,.0f}<extra></extra>" if is_idr else "<b>%{x|%d %b %Y}</b><br>$%{y:,.2f}<extra></extra>"
         htemp_fc   = "<b>%{x|%d %b %Y}</b><br>Forecast: " + ("Rp %{y:,.0f}" if is_idr else "$%{y:,.2f}") + "<extra></extra>"
@@ -792,9 +813,9 @@ elif page.startswith("📈"):
         st.markdown('<div class="section-title">📋 Detail Forecast Harian</div>', unsafe_allow_html=True)
         tbl = forecast_df.copy()
         tbl["ds"]          = tbl["ds"].dt.strftime("%d %b %Y")
-        tbl["yhat"]        = tbl["yhat"].apply(lambda x: fmt_price(x, is_idr, kurs_val))
-        tbl["yhat_lower"]  = tbl["yhat_lower"].apply(lambda x: fmt_price(x, is_idr, kurs_val))
-        tbl["yhat_upper"]  = tbl["yhat_upper"].apply(lambda x: fmt_price(x, is_idr, kurs_val))
+        tbl["yhat"]        = tbl["yhat"].apply(lambda x: fmt_price(x, is_idr, harga_rate))
+        tbl["yhat_lower"]  = tbl["yhat_lower"].apply(lambda x: fmt_price(x, is_idr, harga_rate))
+        tbl["yhat_upper"]  = tbl["yhat_upper"].apply(lambda x: fmt_price(x, is_idr, harga_rate))
         tbl.columns        = ["Tanggal", "Forecast", "Batas Bawah", "Batas Atas"]
         tbl.index          = range(1, len(tbl) + 1)
         st.dataframe(tbl, use_container_width=True)
@@ -842,14 +863,14 @@ elif page.startswith("📊"):
         mark = "🟢" if (key == "hw" and hw_better) or (key == "pr" and not hw_better) else "🔴"
         
         # Jika is_err_val True (untuk MAE/RMSE), kalikan dengan kurs
-        disp_val = float(val) * kurs_val if is_err_val else float(val)
+        disp_val = float(val) * harga_rate if is_err_val else float(val)
         
         if is_err_val and is_idr:
             return f"{mark}  Rp {int(disp_val):,}".replace(",", ".")
         return f"{mark}  {disp_val:.4f}"
 
     rows = {
-        "Metrik": [f"MAE ({curr_label})", f"RMSE ({curr_label})", "MAPE (%)"],
+        "Metrik": [f"MAE ({curr_label}/{satuan_label})", f"RMSE ({curr_label}/{satuan_label})", "MAPE (%)"],
         "Holt-Winters": [
             fmt_metric(hw.get("MAE", 0),  "hw", hw.get("MAE"),  pr.get("MAE"), True),
             fmt_metric(hw.get("RMSE", 0), "hw", hw.get("RMSE"), pr.get("RMSE"), True),
@@ -913,9 +934,9 @@ elif page.startswith("📄"):
     df_view = df[(df.index.date >= date_start) & (df.index.date <= date_end)].copy()
     df_view.index = df_view.index.strftime("%d %b %Y")
     
-    col_name = f"Harga Penutupan ({curr_label})"
+    col_name = f"Harga Penutupan ({curr_label}/{satuan_label})"
     df_view.columns = [col_name]
-    df_view[col_name] = df_view[col_name].apply(lambda x: fmt_price(x, is_idr, kurs_val))
+    df_view[col_name] = df_view[col_name].apply(lambda x: fmt_price(x, is_idr, harga_rate))
 
     st.dataframe(df_view, use_container_width=True, height=420)
 
