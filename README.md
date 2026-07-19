@@ -8,7 +8,6 @@
 
     Model terbaik dipilih otomatis berdasarkan **MAPE** terendah pada data uji.
 
-    ---
 ## 📂 Dataset
     | Sumber | Yahoo Finance (`GC=F`) |
     |--------|----------------------|
@@ -16,7 +15,6 @@
     | Rentang | Jul 2021 – sekarang |
     | Kolom | `Date`, `Close` (USD/oz) |
 
-    ---
 ## 🔬 Machine Learning Workflow
 
     ```
@@ -39,7 +37,6 @@
          app.py (Dashboard)
     ```
 
-    ---
 ## 🚀 Cara Menjalankan
 
     ```bash
@@ -56,7 +53,6 @@
     streamlit run app.py
     ```
 
-    ---
  ## 🌐 Deployment
     Dapat di-deploy ke **Streamlit Community Cloud**:
     1. Push repo ke GitHub
@@ -76,6 +72,5 @@
     | joblib | ≥ 1.2 |
     | scikit-learn | ≥ 1.2 |
 
-    ---
 
 Made with ❤️ ☕ · Gold Price Forecast Dashboard
