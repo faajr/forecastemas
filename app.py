@@ -438,8 +438,15 @@ def plotly_theme() -> dict:
     )
 
 
-def fmt_usd(val: float) -> str:
-    return f"${val:,.2f}"
+def fmt_price(val: float, is_idr: bool, rate: float) -> str:
+    """Format harga dinamis (USD / IDR)."""
+    if pd.isna(val):
+        return "—"
+    converted = val * rate
+    if is_idr:
+        # Menghasilkan format Rp 16.000.000
+        return f"Rp {int(converted):,}".replace(",", ".")
+    return f"${converted:,.2f}"
 
 
 def run_forecast(model_data: dict, df: pd.DataFrame, horizon: int) -> pd.DataFrame:
@@ -473,7 +480,7 @@ def run_forecast(model_data: dict, df: pd.DataFrame, horizon: int) -> pd.DataFra
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Sidebar
+#  Sidebar & Currency Settings
 # ═══════════════════════════════════════════════════════════════════════════════
 
 with st.sidebar:
@@ -499,6 +506,19 @@ with st.sidebar:
         ],
         label_visibility="collapsed",
     )
+
+    # -- Currency Toggle --
+    st.markdown('<hr style="border-color:rgba(255,215,0,0.15); margin:18px 0 14px;">', unsafe_allow_html=True)
+    st.markdown('<div style="color:#FFD700; font-weight:600; font-size:0.85rem; margin-bottom:8px;">MATA UANG</div>', unsafe_allow_html=True)
+    currency_mode = st.radio("Mata Uang", ["USD", "IDR"], horizontal=True, label_visibility="collapsed")
+    
+    if currency_mode == "IDR":
+        kurs_val = st.number_input("Kurs 1 USD = Rp", value=16200.0, step=100.0)
+    else:
+        kurs_val = 1.0
+        
+    is_idr = (currency_mode == "IDR")
+    curr_label = "IDR" if is_idr else "USD"
 
     st.markdown("""
     <hr style="border-color:rgba(255,215,0,0.15); margin:18px 0 14px;">
@@ -528,7 +548,7 @@ else:
 
 if not data_ok:
     st.error(
-        "⚠️ File **harga_emas_siap_forecast.csv** tidak ditemukan di direktori ini dan gagal diunduh dari URL.\n\n"
+        "⚠️ File **harga_emas.csv** tidak ditemukan di direktori ini dan gagal diunduh dari URL.\n\n"
         "Silakan periksa koneksi internet Anda lalu refresh halaman."
     )
 
@@ -537,7 +557,6 @@ if not data_ok:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if page.startswith("🏠"):
-    # Hero
     st.markdown("""
     <div class="hero-banner">
       <div class="hero-icon">🥇</div>
@@ -559,22 +578,17 @@ if page.startswith("🏠"):
     delta_arrow = "▲" if delta >= 0 else "▼"
 
     best_model = metrics.get("best_model", "—")
-    mape_val   = metrics.get(
-        "prophet" if best_model == "Prophet" else "holt_winters", {}
-    ).get("MAPE", "—")
-    rmse_val   = metrics.get(
-        "prophet" if best_model == "Prophet" else "holt_winters", {}
-    ).get("RMSE", "—")
+    mape_val   = metrics.get("prophet" if best_model == "Prophet" else "holt_winters", {}).get("MAPE", "—")
+    rmse_val   = metrics.get("prophet" if best_model == "Prophet" else "holt_winters", {}).get("RMSE", "—")
 
-    # KPI Cards
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
         st.markdown(f"""
         <div class="kpi-card">
           <div class="kpi-label">Harga Terakhir</div>
-          <div class="kpi-value">{fmt_usd(last_price)}</div>
-          <div class="kpi-sub {delta_color}">{delta_arrow} {fmt_usd(abs(delta))} ({delta_pct:+.2f}%)</div>
+          <div class="kpi-value">{fmt_price(last_price, is_idr, kurs_val)}</div>
+          <div class="kpi-sub {delta_color}">{delta_arrow} {fmt_price(abs(delta), is_idr, kurs_val)} ({delta_pct:+.2f}%)</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -597,10 +611,11 @@ if page.startswith("🏠"):
         """, unsafe_allow_html=True)
 
     with c4:
+        rmse_display = fmt_price(rmse_val, is_idr, kurs_val) if isinstance(rmse_val, (int, float)) else "—"
         st.markdown(f"""
         <div class="kpi-card">
           <div class="kpi-label">RMSE</div>
-          <div class="kpi-value">{f"{rmse_val:.2f}" if isinstance(rmse_val, float) else "—"}</div>
+          <div class="kpi-value" style="font-size:1.5rem;">{rmse_display}</div>
           <div class="kpi-sub">Root Mean Squared Error</div>
         </div>
         """, unsafe_allow_html=True)
@@ -610,21 +625,16 @@ if page.startswith("🏠"):
     # Chart historis
     st.markdown('<div class="section-title">📈 Grafik Harga Emas Historis</div>', unsafe_allow_html=True)
 
-    # Slider untuk filter rentang
     year_min = int(df.index.year.min())
     year_max = int(df.index.year.max())
-    sel_years = st.slider(
-        "Pilih rentang tahun",
-        min_value=year_min,
-        max_value=year_max,
-        value=(year_min, year_max),
-        step=1,
-    )
-    df_filtered = df[(df.index.year >= sel_years[0]) & (df.index.year <= sel_years[1])]
-
-    # Rolling MA
+    sel_years = st.slider("Pilih rentang tahun", min_value=year_min, max_value=year_max, value=(year_min, year_max), step=1)
+    
+    df_filtered = df[(df.index.year >= sel_years[0]) & (df.index.year <= sel_years[1])].copy()
+    df_filtered["Close"] = df_filtered["Close"] * kurs_val  # Apply conversion to plot
     ma30 = df_filtered["Close"].rolling(30).mean()
 
+    htemp = "<b>%{x|%d %b %Y}</b><br>Rp %{y:,.0f}<extra></extra>" if is_idr else "<b>%{x|%d %b %Y}</b><br>$%{y:,.2f}<extra></extra>"
+    
     fig_hist = go.Figure()
     fig_hist.add_trace(go.Scatter(
         x=df_filtered.index, y=df_filtered["Close"],
@@ -633,33 +643,35 @@ if page.startswith("🏠"):
         line=dict(color=GOLD_PRIMARY, width=1.5),
         fill="tozeroy",
         fillcolor="rgba(255,215,0,0.05)",
-        hovertemplate="<b>%{x|%d %b %Y}</b><br>$%{y:,.2f}<extra></extra>",
+        hovertemplate=htemp,
     ))
     fig_hist.add_trace(go.Scatter(
         x=df_filtered.index, y=ma30,
         mode="lines",
         name="MA 30 Hari",
         line=dict(color="#FF8C00", width=1.8, dash="dash"),
-        hovertemplate="MA30: $%{y:,.2f}<extra></extra>",
+        hovertemplate="MA30:<br>" + ("Rp %{y:,.0f}" if is_idr else "$%{y:,.2f}") + "<extra></extra>",
     ))
+    
+    y_prefix = "Rp " if is_idr else "$"
     fig_hist.update_layout(
         **plotly_theme(),
         height=420,
-        title=dict(text="Harga Emas (GC=F) — USD per Troy Ounce", font=dict(color=GOLD_LIGHT, size=15)),
+        title=dict(text=f"Harga Emas (GC=F) — {curr_label} per Troy Ounce", font=dict(color=GOLD_LIGHT, size=15)),
         xaxis_rangeslider_visible=True,
+        yaxis=dict(tickprefix=y_prefix)
     )
-    st.plotly_chart(fig_hist, use_container_width=True, config={"toImageButtonOptions": {"format": "png"}})
+    st.plotly_chart(fig_hist, use_container_width=True)
 
     # Statistik ringkas
     st.markdown('<div class="section-title">📊 Statistik Historis</div>', unsafe_allow_html=True)
     s1, s2, s3, s4, s5 = st.columns(5)
     stats = df["Close"].agg(["min", "max", "mean", "std"])
-    s1.metric("Min", fmt_usd(stats["min"]))
-    s2.metric("Max", fmt_usd(stats["max"]))
-    s3.metric("Rata-rata", fmt_usd(stats["mean"]))
-    s4.metric("Std Dev", fmt_usd(stats["std"]))
+    s1.metric("Min", fmt_price(stats["min"], is_idr, kurs_val))
+    s2.metric("Max", fmt_price(stats["max"], is_idr, kurs_val))
+    s3.metric("Rata-rata", fmt_price(stats["mean"], is_idr, kurs_val))
+    s4.metric("Std Dev", fmt_price(stats["std"], is_idr, kurs_val))
     s5.metric("Total Data", f"{len(df):,} hari")
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PAGE 2 — Forecast
@@ -676,25 +688,13 @@ elif page.startswith("📈"):
     </div>
     """, unsafe_allow_html=True)
 
-    if not data_ok:
+    if not data_ok or not model_ok:
+        st.warning("⚠️ Data/Model belum siap. Latih model terlebih dahulu.")
         st.stop()
 
-    if not model_ok:
-        st.warning(
-            "⚠️ Model belum dilatih. Jalankan `python train_model.py` terlebih dahulu "
-            "untuk melatih model dan menyimpannya sebagai `model.pkl`."
-        )
-        st.stop()
-
-    # Kontrol
     col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([2, 1, 1])
     with col_ctrl1:
-        horizon = st.radio(
-            "Pilih Horizon Forecast",
-            options=[7, 14, 30],
-            format_func=lambda x: f"📅 {x} Hari",
-            horizontal=True,
-        )
+        horizon = st.radio("Pilih Horizon Forecast", options=[7, 14, 30], format_func=lambda x: f"📅 {x} Hari", horizontal=True)
     with col_ctrl2:
         st.markdown("<br>", unsafe_allow_html=True)
         run_btn = st.button("🔮 Jalankan Forecast")
@@ -709,138 +709,93 @@ elif page.startswith("📈"):
         model_name   = model_data["model_name"]
         last_price   = float(df["Close"].iloc[-1])
         last_date    = df.index[-1]
+        
         yhat_max     = float(forecast_df["yhat"].max())
         yhat_min     = float(forecast_df["yhat"].min())
         yhat_mean    = float(forecast_df["yhat"].mean())
 
-        # KPI
         st.markdown('<div class="section-title">📊 Ringkasan Forecast</div>', unsafe_allow_html=True)
         k1, k2, k3, k4, k5 = st.columns(5)
         with k1:
             st.markdown(f"""
-            <div class="kpi-card">
-              <div class="kpi-label">Harga Hari Ini</div>
-              <div class="kpi-value">{fmt_usd(last_price)}</div>
+            <div class="kpi-card"><div class="kpi-label">Harga Hari Ini</div>
+              <div class="kpi-value">{fmt_price(last_price, is_idr, kurs_val)}</div>
               <div class="kpi-sub">{last_date.strftime('%d %b %Y')}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
         with k2:
             st.markdown(f"""
-            <div class="kpi-card">
-              <div class="kpi-label">Forecast Tertinggi</div>
-              <div class="kpi-value kpi-up">{fmt_usd(yhat_max)}</div>
+            <div class="kpi-card"><div class="kpi-label">Forecast Tertinggi</div>
+              <div class="kpi-value kpi-up">{fmt_price(yhat_max, is_idr, kurs_val)}</div>
               <div class="kpi-sub">Dalam {horizon} hari</div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
         with k3:
             st.markdown(f"""
-            <div class="kpi-card">
-              <div class="kpi-label">Forecast Terendah</div>
-              <div class="kpi-value kpi-down">{fmt_usd(yhat_min)}</div>
+            <div class="kpi-card"><div class="kpi-label">Forecast Terendah</div>
+              <div class="kpi-value kpi-down">{fmt_price(yhat_min, is_idr, kurs_val)}</div>
               <div class="kpi-sub">Dalam {horizon} hari</div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
         with k4:
             st.markdown(f"""
-            <div class="kpi-card">
-              <div class="kpi-label">Rata-rata Forecast</div>
-              <div class="kpi-value">{fmt_usd(yhat_mean)}</div>
+            <div class="kpi-card"><div class="kpi-label">Rata-rata Forecast</div>
+              <div class="kpi-value">{fmt_price(yhat_mean, is_idr, kurs_val)}</div>
               <div class="kpi-sub">Dalam {horizon} hari</div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
         with k5:
             st.markdown(f"""
-            <div class="kpi-card">
-              <div class="kpi-label">Model Digunakan</div>
+            <div class="kpi-card"><div class="kpi-label">Model Digunakan</div>
               <div class="kpi-value" style="font-size:1.25rem;">{model_name}</div>
               <div class="kpi-sub">Model terbaik</div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
 
         st.markdown('<div class="gold-divider"></div>', unsafe_allow_html=True)
-
-        # Grafik gabungan historis + forecast
         st.markdown('<div class="section-title">📈 Grafik Historis + Forecast</div>', unsafe_allow_html=True)
 
-        hist_tail = df.tail(90)  # 90 hari terakhir historis
+        hist_tail = df.tail(90).copy()
+        hist_tail["Close"] = hist_tail["Close"] * kurs_val
+        
+        fc_plot = forecast_df.copy()
+        for col in ["yhat", "yhat_lower", "yhat_upper"]:
+            fc_plot[col] = fc_plot[col] * kurs_val
+
+        htemp_hist = "<b>%{x|%d %b %Y}</b><br>Rp %{y:,.0f}<extra></extra>" if is_idr else "<b>%{x|%d %b %Y}</b><br>$%{y:,.2f}<extra></extra>"
+        htemp_fc   = "<b>%{x|%d %b %Y}</b><br>Forecast: " + ("Rp %{y:,.0f}" if is_idr else "$%{y:,.2f}") + "<extra></extra>"
 
         fig_fc = go.Figure()
-
-        # Confidence interval
         fig_fc.add_trace(go.Scatter(
-            x=pd.concat([forecast_df["ds"], forecast_df["ds"][::-1]]),
-            y=pd.concat([forecast_df["yhat_upper"], forecast_df["yhat_lower"][::-1]]),
-            fill="toself",
-            fillcolor="rgba(255,215,0,0.10)",
-            line=dict(color="rgba(0,0,0,0)"),
-            name="Confidence Interval",
-            hoverinfo="skip",
+            x=pd.concat([fc_plot["ds"], fc_plot["ds"][::-1]]),
+            y=pd.concat([fc_plot["yhat_upper"], fc_plot["yhat_lower"][::-1]]),
+            fill="toself", fillcolor="rgba(255,215,0,0.10)", line=dict(color="rgba(0,0,0,0)"),
+            name="Confidence Interval", hoverinfo="skip",
+        ))
+        fig_fc.add_trace(go.Scatter(
+            x=hist_tail.index, y=hist_tail["Close"], mode="lines",
+            name="Historis", line=dict(color=GOLD_PRIMARY, width=1.8), hovertemplate=htemp_hist,
+        ))
+        fig_fc.add_trace(go.Scatter(
+            x=fc_plot["ds"], y=fc_plot["yhat"], mode="lines+markers",
+            name=f"Forecast {model_name}", line=dict(color="#FF8C00", width=2.5, dash="dot"),
+            marker=dict(size=6, color="#FF8C00", symbol="circle"), hovertemplate=htemp_fc,
         ))
 
-        # Historis
-        fig_fc.add_trace(go.Scatter(
-            x=hist_tail.index, y=hist_tail["Close"],
-            mode="lines",
-            name="Historis",
-            line=dict(color=GOLD_PRIMARY, width=1.8),
-            hovertemplate="<b>%{x|%d %b %Y}</b><br>$%{y:,.2f}<extra></extra>",
-        ))
-
-        # Forecast line
-        fig_fc.add_trace(go.Scatter(
-            x=forecast_df["ds"], y=forecast_df["yhat"],
-            mode="lines+markers",
-            name=f"Forecast {model_name}",
-            line=dict(color="#FF8C00", width=2.5, dash="dot"),
-            marker=dict(size=6, color="#FF8C00", symbol="circle"),
-            hovertemplate="<b>%{x|%d %b %Y}</b><br>Forecast: $%{y:,.2f}<extra></extra>",
-        ))
-
-        # Garis pemisah historis-forecast
-        fig_fc.add_vline(
-            x=last_date,
-            line_width=1.5,
-            line_dash="dash",
-            line_color="rgba(255,215,0,0.5)",
-            annotation_text="Hari ini",
-            annotation_font_color=GOLD_LIGHT,
-        )
-
+        fig_fc.add_vline(x=last_date, line_width=1.5, line_dash="dash", line_color="rgba(255,215,0,0.5)")
+        y_prefix = "Rp " if is_idr else "$"
         fig_fc.update_layout(
-            **plotly_theme(),
-            height=460,
-            title=dict(
-                text=f"Forecast {horizon} Hari ke Depan — {model_name}",
-                font=dict(color=GOLD_LIGHT, size=15),
-            ),
+            **plotly_theme(), height=460,
+            title=dict(text=f"Forecast {horizon} Hari ke Depan — {model_name}", font=dict(color=GOLD_LIGHT, size=15)),
             xaxis_rangeslider_visible=False,
+            yaxis=dict(tickprefix=y_prefix)
         )
-        st.plotly_chart(fig_fc, use_container_width=True,
-                        config={"toImageButtonOptions": {"format": "png", "filename": "gold_forecast"}})
+        st.plotly_chart(fig_fc, use_container_width=True)
 
-        # Tabel forecast
         st.markdown('<div class="section-title">📋 Detail Forecast Harian</div>', unsafe_allow_html=True)
         tbl = forecast_df.copy()
         tbl["ds"]          = tbl["ds"].dt.strftime("%d %b %Y")
-        tbl["yhat"]        = tbl["yhat"].apply(fmt_usd)
-        tbl["yhat_lower"]  = tbl["yhat_lower"].apply(fmt_usd)
-        tbl["yhat_upper"]  = tbl["yhat_upper"].apply(fmt_usd)
+        tbl["yhat"]        = tbl["yhat"].apply(lambda x: fmt_price(x, is_idr, kurs_val))
+        tbl["yhat_lower"]  = tbl["yhat_lower"].apply(lambda x: fmt_price(x, is_idr, kurs_val))
+        tbl["yhat_upper"]  = tbl["yhat_upper"].apply(lambda x: fmt_price(x, is_idr, kurs_val))
         tbl.columns        = ["Tanggal", "Forecast", "Batas Bawah", "Batas Atas"]
         tbl.index          = range(1, len(tbl) + 1)
         st.dataframe(tbl, use_container_width=True)
-
-        # Download CSV
-        st.markdown('<div class="section-title">📥 Download</div>', unsafe_allow_html=True)
-        csv_data = forecast_df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="⬇️  Download Forecast.csv",
-            data=csv_data,
-            file_name=f"forecast_emas_{horizon}hari.csv",
-            mime="text/csv",
-        )
-    else:
-        st.info("👆 Pilih horizon forecast dan klik **Jalankan Forecast** untuk melihat prediksi.")
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PAGE 3 — Evaluasi Model
@@ -858,17 +813,13 @@ elif page.startswith("📊"):
     """, unsafe_allow_html=True)
 
     if not metrics:
-        st.warning(
-            "⚠️ File `metrics.json` tidak ditemukan. "
-            "Jalankan `python train_model.py` terlebih dahulu."
-        )
+        st.warning("⚠️ File `metrics.json` tidak ditemukan. Latih model terlebih dahulu.")
         st.stop()
 
     hw  = metrics.get("holt_winters", {})
     pr  = metrics.get("prophet",      {})
     best = metrics.get("best_model",  "—")
 
-    # Header
     st.markdown(f"""
     <div style="background:rgba(255,215,0,0.08); border:1px solid rgba(255,215,0,0.3);
                 border-radius:14px; padding:18px 24px; margin-bottom:24px;
@@ -881,80 +832,49 @@ elif page.startswith("📊"):
     </div>
     """, unsafe_allow_html=True)
 
-    # Tabel perbandingan
     st.markdown('<div class="section-title">📋 Tabel Perbandingan Metrik</div>', unsafe_allow_html=True)
 
-    def fmt_metric(val, key, hw_v, pr_v):
-        """Tandai model mana yang lebih baik dengan warna."""
-        hw_better = float(hw_v) <= float(pr_v) if hw_v and pr_v else False
-        if key == "hw":
-            mark = "🟢" if hw_better else "🔴"
-        else:
-            mark = "🔴" if hw_better else "🟢"
-        return f"{mark}  {val:.4f}"
+    def fmt_metric(val, key, hw_v, pr_v, is_err_val=False):
+        if not hw_v or not pr_v: return "—"
+        hw_better = float(hw_v) <= float(pr_v)
+        mark = "🟢" if (key == "hw" and hw_better) or (key == "pr" and not hw_better) else "🔴"
+        
+        # Jika is_err_val True (untuk MAE/RMSE), kalikan dengan kurs
+        disp_val = float(val) * kurs_val if is_err_val else float(val)
+        
+        if is_err_val and is_idr:
+            return f"{mark}  Rp {int(disp_val):,}".replace(",", ".")
+        return f"{mark}  {disp_val:.4f}"
 
     rows = {
-        "Metrik": ["MAE", "RMSE", "MAPE (%)"],
+        "Metrik": [f"MAE ({curr_label})", f"RMSE ({curr_label})", "MAPE (%)"],
         "Holt-Winters": [
-            fmt_metric(hw.get("MAE", 0),  "hw", hw.get("MAE"),  pr.get("MAE")),
-            fmt_metric(hw.get("RMSE", 0), "hw", hw.get("RMSE"), pr.get("RMSE")),
-            fmt_metric(hw.get("MAPE", 0), "hw", hw.get("MAPE"), pr.get("MAPE")),
+            fmt_metric(hw.get("MAE", 0),  "hw", hw.get("MAE"),  pr.get("MAE"), True),
+            fmt_metric(hw.get("RMSE", 0), "hw", hw.get("RMSE"), pr.get("RMSE"), True),
+            fmt_metric(hw.get("MAPE", 0), "hw", hw.get("MAPE"), pr.get("MAPE"), False),
         ],
         "Prophet": [
-            fmt_metric(pr.get("MAE", 0),  "pr", hw.get("MAE"),  pr.get("MAE")),
-            fmt_metric(pr.get("RMSE", 0), "pr", hw.get("RMSE"), pr.get("RMSE")),
-            fmt_metric(pr.get("MAPE", 0), "pr", hw.get("MAPE"), pr.get("MAPE")),
+            fmt_metric(pr.get("MAE", 0),  "pr", hw.get("MAE"),  pr.get("MAE"), True),
+            fmt_metric(pr.get("RMSE", 0), "pr", hw.get("RMSE"), pr.get("RMSE"), True),
+            fmt_metric(pr.get("MAPE", 0), "pr", hw.get("MAPE"), pr.get("MAPE"), False),
         ],
     }
     st.dataframe(pd.DataFrame(rows).set_index("Metrik"), use_container_width=True)
 
-    # Grafik radar / bar
-    st.markdown('<div class="section-title">📈 Visualisasi Perbandingan Metrik</div>', unsafe_allow_html=True)
-
-    metric_keys = ["MAE", "RMSE", "MAPE"]
-    hw_vals  = [hw.get(k, 0) for k in metric_keys]
-    pr_vals  = [pr.get(k, 0) for k in metric_keys]
-
+    st.markdown('<div class="section-title">📈 Visualisasi Perbandingan MAPE</div>', unsafe_allow_html=True)
+    
+    # Hanya memvisualisasikan MAPE agar tidak terdistorsi satuan uang
     fig_eval = go.Figure()
     fig_eval.add_trace(go.Bar(
-        name="Holt-Winters",
-        x=metric_keys,
-        y=hw_vals,
-        marker_color=GOLD_PRIMARY,
-        text=[f"{v:.2f}" for v in hw_vals],
-        textposition="outside",
-        textfont=dict(color=GOLD_LIGHT),
+        name="Holt-Winters", x=["MAPE (%)"], y=[hw.get("MAPE", 0)],
+        marker_color=GOLD_PRIMARY, text=[f"{hw.get('MAPE', 0):.2f}%"], textposition="outside",
     ))
     fig_eval.add_trace(go.Bar(
-        name="Prophet",
-        x=metric_keys,
-        y=pr_vals,
-        marker_color="#FF8C00",
-        text=[f"{v:.2f}" for v in pr_vals],
-        textposition="outside",
-        textfont=dict(color="#FFC080"),
+        name="Prophet", x=["MAPE (%)"], y=[pr.get("MAPE", 0)],
+        marker_color="#FF8C00", text=[f"{pr.get('MAPE', 0):.2f}%"], textposition="outside",
     ))
-    fig_eval.update_layout(
-        **plotly_theme(),
-        barmode="group",
-        height=380,
-        title=dict(
-            text="Perbandingan MAE · RMSE · MAPE",
-            font=dict(color=GOLD_LIGHT, size=15),
-        ),
-    )
+    fig_eval.update_layout(**plotly_theme(), barmode="group", height=380)
     st.plotly_chart(fig_eval, use_container_width=True)
-
-    # Penjelasan metrik
-    st.markdown('<div class="section-title">📖 Penjelasan Metrik</div>', unsafe_allow_html=True)
-    st.markdown("""
-    | Metrik | Keterangan |
-    |--------|-----------|
-    | **MAE** (Mean Absolute Error) | Rata-rata error absolut prediksi. Semakin kecil semakin baik. |
-    | **RMSE** (Root Mean Squared Error) | Penalti lebih besar untuk error besar. Semakin kecil semakin baik. |
-    | **MAPE** (Mean Absolute Percentage Error) | Error dalam persentase. Model terbaik dipilih berdasarkan MAPE terkecil. |
-    """)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PAGE 4 — Dataset
@@ -966,7 +886,7 @@ elif page.startswith("📄"):
       <div class="hero-icon">📄</div>
       <div>
         <p class="hero-title">Dataset Harga Emas</p>
-        <p class="hero-sub">GC=F — Harga penutupan harian (USD/troy oz)</p>
+        <p class="hero-sub">GC=F — Harga penutupan harian</p>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -974,16 +894,14 @@ elif page.startswith("📄"):
     if not data_ok:
         st.stop()
 
-    # Info
     col_a, col_b, col_c = st.columns(3)
     col_a.metric("Total Data", f"{len(df):,} hari")
     col_b.metric("Mulai", df.index.min().strftime("%d %b %Y"))
     col_c.metric("Akhir",  df.index.max().strftime("%d %b %Y"))
 
     st.markdown('<div class="gold-divider"></div>', unsafe_allow_html=True)
-
-    # Filter rentang
     st.markdown('<div class="section-title">🔍 Filter & Tampilkan Data</div>', unsafe_allow_html=True)
+    
     f1, f2 = st.columns(2)
     with f1:
         date_start = st.date_input("Dari tanggal", value=df.index.min().date())
@@ -992,26 +910,16 @@ elif page.startswith("📄"):
 
     df_view = df[(df.index.date >= date_start) & (df.index.date <= date_end)].copy()
     df_view.index = df_view.index.strftime("%d %b %Y")
-    df_view.columns = ["Harga Penutupan (USD)"]
-    df_view["Harga Penutupan (USD)"] = df_view["Harga Penutupan (USD)"].apply(fmt_usd)
+    
+    col_name = f"Harga Penutupan ({curr_label})"
+    df_view.columns = [col_name]
+    df_view[col_name] = df_view[col_name].apply(lambda x: fmt_price(x, is_idr, kurs_val))
 
     st.dataframe(df_view, use_container_width=True, height=420)
 
-    # Download CSV
-    st.markdown('<div class="section-title">📥 Download Dataset</div>', unsafe_allow_html=True)
-    csv_raw = df.reset_index().to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="⬇️  Download Dataset.csv",
-        data=csv_raw,
-        file_name="harga_emas_historis.csv",
-        mime="text/csv",
-    )
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
-#  PAGE 5 — About
+#  PAGE 5 — About 
 # ═══════════════════════════════════════════════════════════════════════════════
-
 elif page.startswith("ℹ️"):
     st.markdown("""
     <div class="hero-banner">
@@ -1109,4 +1017,4 @@ elif page.startswith("ℹ️"):
     ---
 
       Made with ❤️ ☕ · Gold Price Forecast Dashboard
-    """)
+    , unsafe_allow_html=True)
