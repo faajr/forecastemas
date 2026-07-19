@@ -1017,4 +1017,3 @@ elif page.startswith("ℹ️"):
     ---
 
       Made with ❤️ ☕ · Gold Price Forecast Dashboard
-    , unsafe_allow_html=True)
