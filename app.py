@@ -607,7 +607,7 @@ if page.startswith("🏠"):
     with c1:
         st.markdown(f"""
         <div class="kpi-card">
-          <div class="kpi-label">Harga Terakhir - 17 Juli 2026</div>
+          <div class="kpi-label">Harga Terakhir - 17/06/2026</div>
           <div class="kpi-value">{fmt_price(last_price, is_idr, harga_rate)}</div>
           <div class="kpi-sub {delta_color}">{delta_arrow} {fmt_price(abs(delta), is_idr, harga_rate)} ({delta_pct:+.2f}%)</div>
         </div>
