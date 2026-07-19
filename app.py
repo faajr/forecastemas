@@ -543,7 +543,7 @@ if page.startswith("🏠"):
       <div class="hero-icon">🥇</div>
       <div>
         <p class="hero-title">Gold Price Forecast</p>
-        <p class="hero-sub">Machine Learning · Holt-Winters &amp; Prophet · Dark Dashboard</p>
+        <p class="hero-sub">Machine Learning · Holt-Winters &amp; Prophet ·</p>
       </div>
     </div>
     """, unsafe_allow_html=True)
