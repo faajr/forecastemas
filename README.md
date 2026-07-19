@@ -1,16 +1,5 @@
-elif page.startswith("ℹ️"):
-    st.markdown("""
-    <div class="hero-banner">
-      <div class="hero-icon">ℹ️</div>
-      <div>
-        <p class="hero-title">Tentang Proyek</p>
-        <p class="hero-sub">Gold Price Forecast — Machine Learning Time Series</p>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    ## 📌 Project Overview
+## ℹ️Gold Price Forecast — Machine Learning Time Series
+## 📌 Project Overview
     Proyek ini membangun sistem **forecasting harga emas** (GC=F — Gold Futures) menggunakan
     dua algoritma machine learning time series:
 
@@ -20,8 +9,7 @@ elif page.startswith("ℹ️"):
     Model terbaik dipilih otomatis berdasarkan **MAPE** terendah pada data uji.
 
     ---
-
-    ## 📂 Dataset
+## 📂 Dataset
     | Sumber | Yahoo Finance (`GC=F`) |
     |--------|----------------------|
     | Frekuensi | Harian (hari kerja) |
@@ -29,8 +17,7 @@ elif page.startswith("ℹ️"):
     | Kolom | `Date`, `Close` (USD/oz) |
 
     ---
-
-    ## 🔬 Machine Learning Workflow
+## 🔬 Machine Learning Workflow
 
     ```
       harga_emas.csv
@@ -53,8 +40,7 @@ elif page.startswith("ℹ️"):
     ```
 
     ---
-
-    ## 🚀 Cara Menjalankan
+## 🚀 Cara Menjalankan
 
     ```bash
     # 1. Install dependencies
@@ -71,16 +57,14 @@ elif page.startswith("ℹ️"):
     ```
 
     ---
-
-    ## 🌐 Deployment
+ ## 🌐 Deployment
     Dapat di-deploy ke **Streamlit Community Cloud**:
     1. Push repo ke GitHub
     2. Login ke [share.streamlit.io](https://share.streamlit.io)
     3. Deploy dari repo
 
     ---
-
-    ## 🛠️ Tech Stack
+## 🛠️ Tech Stack
     | Library | Versi |
     |---------|-------|
     | streamlit | ≥ 1.30 |
@@ -94,4 +78,4 @@ elif page.startswith("ℹ️"):
 
     ---
 
-      Made with ❤️ ☕ · Gold Price Forecast Dashboard
+Made with ❤️ ☕ · Gold Price Forecast Dashboard
